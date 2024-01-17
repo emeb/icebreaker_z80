@@ -1,0 +1,704 @@
+# File z80UARTMonitor.asm
+0000			; 
+0000			; Simple monitor on UART 
+0000			; 
+0000			; Derived from https://github.com:fiskabollen/z80Monitor 
+0000			; Ported to z80asm for icebreaker_z80 by ebrombaugh@gmail.com 01-02-24 
+0000			; 
+0000			;  Current address is in HL 
+0000			;  Display [nnnn] bb (A) 
+0000			;          nnnn is current address, bb is hex byte, A is ASCII char 
+0000			;  Input: 
+0000			; <space> displays current byte 
+0000			; [0-9,A-F] enters current address 
+0000			; <enter> increments current address (loops through FFFF) 
+0000			; <backspace> decrements current address (loops through 0000) 
+0000			; l lists 16 locations, update current 
+0000			; d dumps a grid of memory from current until keypress 
+0000			; c copies memory: requesting from, to and length 
+0000			; S (capital) enters set mode: hex input fills memory until <enter> or <ESC> 
+0000			; X (capital) executes from current 
+0000			; h <enter> display this help 
+0000			; any errors dislpays '?'",$0A,$0D 
+0000			; 
+0000			; Memory Map is 
+0000			; 0000-3FFF	16K ROM (probably though only 4k or 8k chip) 
+0000			; 4000-7FFF space for 16K of memory (ROM or RAM) 
+0000			; 8000-FFFF 32K RAM 
+0000			 
+0000			 
+0000			ACIA_PORT:	equ $03	; The UART's data buffer for in/out 
+0000			ACIA_LSR:	equ	$02	; Line Status Register (used for transmitter empty bit) 
+0000			 
+0000			RAMTOP:		equ	$FFFF	;	RAM ends at $FFFF 
+0000			TEMP:		equ RAMTOP	; 	Temporary storage byte 
+0000			KDATA1:		equ TEMP-1	;	keyed input for addresses 
+0000			KDATA2:		equ KDATA1-1 
+0000			BUFFER:		equ	KDATA2-256	; for building strings - 256 bytes 
+0000			STACK:		equ BUFFER-1	; then we have the stack 
+0000				 
+0000				org 0 
+0000				 
+0000 31 fc fe			LD SP,STACK 
+0003			 
+0003			init: 
+0003 21 00 00			LD HL,0000h 
+0006				 
+0006			start: 
+0006			; Output the startup text 
+0006 11 d3 02			LD DE, TEXT0 
+0009 cd a6 02			CALL otext 
+000c				 
+000c			; Output the current location [nnnn] bb (A) 
+000c			display: 
+000c cd 1e 02			CALL dispadd	; Display [nnnn] 
+000f 3e 20			LD A, ' ' 
+0011 cd 9a 02			CALL outchar 
+0014 cd 9a 02			CALL outchar 
+0017 7e				LD A, (HL) 
+0018 cd 31 02			CALL hexout 
+001b 3e 20			LD A, ' ' 
+001d cd 9a 02			CALL outchar 
+0020 3e 28			LD A, '(' 
+0022 cd 9a 02			CALL outchar 
+0025 7e				LD A, (HL) 
+0026 cd 9a 02			CALL outchar 
+0029 3e 29			LD A, ')' 
+002b cd 9a 02			CALL outchar 
+002e cd b6 02			CALL OUTCRLF 
+0031				 
+0031			inloop: 
+0031 cd 83 02			CALL inchar			; wait for input 
+0034 01 00 00			LD BC, 0			; C is used 
+0037			 
+0037			;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+0037			;; SELECT BASED ON INPUT CHAR 
+0037			;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+0037 fe 20			CP ' '			; <space>: display 
+0039 ca 0c 00			JP Z, display 
+003c fe 0d			CP $0D			; <CR>: increment and display 
+003e c2 45 00			JP NZ, L1 
+0041 23				INC HL 
+0042 c3 0c 00			JP display 
+0045 fe 7f		L1:	CP $7F		; backspace: decrement and display 
+0047 c2 4e 00			JP NZ, L2 
+004a 2b				DEC HL 
+004b c3 0c 00			JP display 
+004e fe 68		L2:	CP 'h'			; h: show help then display 
+0050 ca 06 00			JP Z, start 
+0053 fe 63			CP 'c'			; c: copy memory 
+0055 ca 32 01			JP Z, copy 
+0058 fe 64			CP 'd'			; d: dump until keypress 
+005a ca d9 00			JP Z, dump 
+005d fe 6c			CP 'l'			; l: list 16 locations 
+005f ca d7 00			JP Z, list 
+0062 fe 53			CP 'S'			; S: enter write mode (set) 
+0064 ca 9d 00			JP Z, set 
+0067 fe 6b			CP 'k'			; k: bulk set memory 
+0069 ca 67 04			JP Z, bulkset 
+006c fe 74			CP 't'			; t: type ascii to memory 
+006e ca c5 04			JP Z, typemem 
+0071 fe 58			CP 'X'			; X: execute from current 
+0073 ca be 00			JP Z, exec 
+0076 fe 30			CP 30h			; test for hex digit 
+0078 da 92 00			JP C, notdig	; < $30 
+007b fe 47			CP 47h			 
+007d d2 92 00			JP NC, notdig	; >= $47 
+0080 fe 3a			CP 3Ah 
+0082 d2 88 00			JP NC, T1		; >= $3A 
+0085 c3 8c 00			JP digit 
+0088 fe 41		T1:	CP 41h			; AND 
+008a 38 06			JR C, notdig	; < $41 
+008c			digit: 
+008c cd 74 01			CALL fourcar	; <hexdigit>: address entry 
+008f c3 0c 00			JP display 
+0092			notdig: 
+0092 3e 3f			LD A, '?'		; no other commands, output '?' 
+0094 cd 9a 02			CALL outchar 
+0097 cd b6 02			CALL OUTCRLF 
+009a c3 0c 00			JP display 
+009d			 
+009d			;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+009d			;; SET 
+009d			;;   output SET [aaaa] [nn] where nn is current contents 
+009d			;;   call two character input to set (HL) 
+009d			;;   increment HL 
+009d			;;   repeat until <esc> 
+009d			;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+009d			set: 
+009d 11 23 04			LD DE, SETTXT 
+00a0 cd a6 02			CALL otext 
+00a3 cd 1e 02			CALL dispadd 
+00a6 3e 20			LD A, ' ' 
+00a8 cd 9a 02			CALL outchar 
+00ab				 
+00ab cd d3 01			CALL twocar		; two character input and set (HL) 
+00ae cd b6 02			CALL OUTCRLF	; new line 
+00b1 78				LD A, B			; B contains $FF if we aborted 
+00b2 fe ff			CP $FF 
+00b4 c2 ba 00			JP NZ, setend	; abort - go to display 
+00b7 c3 0c 00			JP display	 
+00ba			setend: 
+00ba 23				INC HL			; else next address and loops 
+00bb c3 9d 00			JP set 
+00be				 
+00be			;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+00be			;; EXECUTE 
+00be			;;    execute from HL 
+00be			;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+00be			exec: 
+00be 11 28 04			LD DE, EXTXT	; confirmation text 
+00c1 cd a6 02			CALL otext 
+00c4 cd 1e 02			CALL dispadd 
+00c7 cd b6 02			CALL OUTCRLF 
+00ca				 
+00ca cd 83 02			CALL inchar 
+00cd fe 0d			CP $0D			; <ret> we continue, else abort 
+00cf c2 d4 00			JP NZ, xabort	 
+00d2 e5				PUSH HL 
+00d3 c9				RET 
+00d4			xabort: 
+00d4 c3 0c 00			JP display 
+00d7				 
+00d7			;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+00d7			;; LIST - LIST 16 LOCATIONS, SETTING HL 
+00d7			;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+00d7			list: 
+00d7 0e ff			LD C, $FF		; Use C=$FF to do one cycle of dump 
+00d9			 
+00d9			;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+00d9			;; DUMP - dump memory from current location until keypress 
+00d9			;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+00d9			dump: 
+00d9 7c				LD A, H 
+00da cd 31 02			CALL hexout 
+00dd 7d				LD A, L 
+00de cd 31 02			CALL hexout 
+00e1				 
+00e1 3e 20			LD A, ' ' 
+00e3 cd 9a 02			CALL outchar 
+00e6 cd 9a 02			CALL outchar 
+00e9			 
+00e9 06 10			LD B, 16 
+00eb dd 21 fd fe		LD IX, BUFFER		; Build string of ASCII values at TEMP 
+00ef			loop16:	 
+00ef 7e				LD A, (HL) 
+00f0 cd 31 02			CALL hexout 
+00f3 dd 36 00 2e		LD (IX+0), '.'		; set it to dot and we'll overwrite if it's displayable 
+00f7 fe 20			CP 20h				; displayable is >$19 and <$7f 
+00f9 fa 04 01			JP M, skip 
+00fc fe 7f			CP 7Fh 
+00fe f2 04 01			JP P, skip 
+0101 dd 77 00			LD (IX+0), A			; replace with the ASCII code otherwise 
+0104			skip: 
+0104 3e 20			LD A, ' ' 
+0106 cd 9a 02			CALL outchar 
+0109 23				INC HL 
+010a dd 23			INC IX 
+010c 05				DEC B 
+010d 3e 00			LD A, 0 
+010f b8				CP B 
+0110 c2 ef 00			JP NZ, loop16 
+0113				 
+0113				; Output the 8 ASCII chars at BUFFER 
+0113				; Add a $80 on the end and use otext routine 
+0113 3e 80			LD A, 80h 
+0115 32 0d ff			LD (BUFFER+16), A 
+0118 11 fd fe			LD DE, BUFFER 
+011b cd a6 02			CALL otext 
+011e cd b6 02			CALL OUTCRLF 
+0121				 
+0121 79				LD A, C				; check if we were only doing one line 
+0122 fe ff			CP $FF 
+0124 ca 0c 00			JP Z, display		; C was $FF so stop at one cycle 
+0127				 
+0127 cd 8d 02			CALL chkchar		; check if a key was pressed 
+012a fe ff			CP $FF 
+012c c2 0c 00			JP NZ, display		; a keypress: abort 
+012f				 
+012f c3 d9 00			JP dump 
+0132				 
+0132			;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+0132			;; COPY from, to, length (all in hex) 
+0132			;;    use BUFFER to store 'to' and 'from' 
+0132			;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+0132			copy: 
+0132 e5				PUSH HL 
+0133 d5				PUSH DE 
+0134 c5				PUSH BC 
+0135 11 2e 04			LD DE, CPTXT1	; Copy: From 
+0138 cd a6 02			CALL otext 
+013b				 
+013b 3e 30			LD A, $30		; start fourcar with [0000] 
+013d cd 74 01			CALL fourcar 
+0140 22 fd fe			LD (BUFFER), HL 
+0143 11 39 04			LD DE, CPTXT2	; To: 
+0146 cd a6 02			CALL otext 
+0149 3e 30			LD A, $30		; start fourcar with [0000] 
+014b cd 74 01			CALL fourcar 
+014e 22 ff fe			LD (BUFFER+2), HL 
+0151 11 3d 04			LD DE, CPTXT3	; Length: 
+0154 cd a6 02			CALL otext 
+0157 3e 30			LD A, $30		; start fourcar with [0000] 
+0159 cd 74 01			CALL fourcar 
+015c			;	LD BC, HL		; set up for eLDIR - this instr is not legal for orig z80 
+015c 44				LD B, H		; set up for eLDIR 
+015d 4d				LD C, L		; set up for eLDIR 
+015e ed 5b ff fe		LD DE, (BUFFER+2) 
+0162 2a fd fe			LD HL, (BUFFER) 
+0165 cd 63 02			CALL eLDIR 
+0168				 
+0168 11 45 04			LD DE, DONETXT	; Done 
+016b cd a6 02			CALL otext 
+016e c1				POP BC 
+016f d1				POP DE 
+0170 e1				POP HL 
+0171 c3 0c 00			JP display 
+0174			 
+0174			;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+0174			;; Four hex digit rotating input starting with contents of A 
+0174			;;   exits on <ret> or <esc> 
+0174			;;   HL contains the address input on return 
+0174			;;   or HL remains unchanged on abort 
+0174			;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+0174			fourcar: 
+0174 f5					PUSH AF 
+0175 c5					PUSH BC 
+0176			;		LD BC, HL		; save original HL - illegal opcode 
+0176 44					LD B, H		; save original HL 
+0177 4d					LD C, L		; save original HL 
+0178					; First set HL to [000(digit)] to display 
+0178 cd 5b 02				CALL ATOHEX 
+017b 6f					LD L, A 
+017c 26 00				LD H, 00h 
+017e 32 fd ff				LD (KDATA2), A	; start with the digit we were given 
+0181 3e 00				LD A, 0 
+0183 32 fe ff				LD (KDATA1), A 
+0186					; Output [nnnn] then one backspace 
+0186 cd 1e 02				CALL dispadd 
+0189 3e 08				LD A, $08 
+018b cd 9a 02				CALL outchar 
+018e			fcloop: 
+018e					; Output 4 backspaces 
+018e 3e 08				LD A, $08 
+0190 cd 9a 02				CALL outchar 
+0193 cd 9a 02				CALL outchar 
+0196 cd 9a 02				CALL outchar 
+0199 cd 9a 02				CALL outchar 
+019c					 
+019c cd 83 02				CALL inchar 
+019f fe 0d				CP $0D			; <return>: end 
+01a1 ca ca 01				JP Z, fcend 
+01a4 fe 1b				CP $1B		; <escape>: abort 
+01a6 c2 ae 01				JP NZ, fccont 
+01a9			;		LD HL, BC		; Abort - restore old value - illegal opcode 
+01a9 60					LD H, B		; Abort - restore old value 
+01aa 69					LD L, C		; Abort - restore old value 
+01ab c3 cd 01				JP fcabort 
+01ae cd 5b 02		fccont:	CALL ATOHEX 
+01b1 21 fd ff				LD HL, KDATA2 
+01b4 ed 6f				RLD 
+01b6 21 fe ff				LD HL, KDATA1 
+01b9 ed 6f				RLD 
+01bb 3a fe ff				LD A, (KDATA1) 
+01be cd 31 02				CALL hexout 
+01c1 3a fd ff				LD A, (KDATA2) 
+01c4 cd 31 02				CALL hexout 
+01c7 c3 8e 01				JP fcloop 
+01ca					 
+01ca 2a fd ff		fcend:	LD HL, (KDATA2)		;Loads L then H 
+01cd			fcabort: 
+01cd cd b6 02				CALL OUTCRLF 
+01d0 c1					POP BC 
+01d1 f1					POP AF 
+01d2 c9					RET	 
+01d3			 
+01d3			;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+01d3			;; TWO CHARACTER ROLLING INPUT ROUTINE, exits on <esc> or <ret> 
+01d3			;;   sets (HL) to A and returns 
+01d3			;;   on <esc> set (HL) to original value, write FF to A and return 
+01d3			;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+01d3			twocar: 
+01d3 e5					PUSH HL 
+01d4					; Output [00] then one backspace 
+01d4 3e 5b				LD A, '[' 
+01d6 cd 9a 02				CALL outchar 
+01d9 3e 30				LD A, '0' 
+01db cd 9a 02				CALL outchar 
+01de cd 9a 02				CALL outchar 
+01e1 3e 5d				LD A, ']' 
+01e3 cd 9a 02				CALL outchar 
+01e6 3e 08				LD A, $08 
+01e8 cd 9a 02				CALL outchar 
+01eb 46					LD B, (HL)		; save the old contents for <esc> 
+01ec 21 fe ff				LD HL, KDATA1 
+01ef 36 00				LD (HL), 0 
+01f1			tcloop: 
+01f1					; Output 2 backspaces 
+01f1 3e 08				LD A, $08 
+01f3 cd 9a 02				CALL outchar 
+01f6 cd 9a 02				CALL outchar 
+01f9			 
+01f9 cd 83 02				CALL inchar 
+01fc fe 0d				CP $0D 
+01fe ca 18 02				JP Z, tcend 
+0201 fe 1b				CP $1B 
+0203 ca 12 02				JP Z, tcabort 
+0206					 
+0206 cd 5b 02				CALL ATOHEX 
+0209 ed 6f				RLD 
+020b 7e					LD A, (HL) 
+020c cd 31 02				CALL hexout 
+020f c3 f1 01				JP tcloop 
+0212					 
+0212			tcabort: 
+0212 78					LD A, B		; <esc>: so restore A 
+0213 32 fe ff				LD (KDATA1), A 
+0216 06 ff				LD B, $FF	; Use $FF in B to indicate an abort 
+0218 e1			tcend:	POP HL 
+0219 3a fe ff				LD A, (KDATA1) 
+021c 77					LD (HL), A	; set (HL) to KDATA1 
+021d c9					RET 
+021e			 
+021e			;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;	 
+021e			;; Display '[aaaa]' - address of HL 
+021e			;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;	 
+021e			dispadd: 
+021e 3e 5b				LD A, '[' 
+0220 cd 9a 02				CALL outchar 
+0223 7c					LD A, H 
+0224 cd 31 02				CALL hexout 
+0227 7d					LD A, L 
+0228 cd 31 02				CALL hexout 
+022b 3e 5d				LD A, ']' 
+022d cd 9a 02				CALL outchar 
+0230 c9					RET 
+0231			 
+0231			;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;	 
+0231			; OUTPUT VALUE OF A IN HEX ONE NYBBLE AT A TIME 
+0231			;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;	 
+0231 c5			hexout:	PUSH BC 
+0232 f5					PUSH AF 
+0233 47					LD B, A 
+0234					; Upper nybble 
+0234 cb 3f				SRL A 
+0236 cb 3f				SRL A 
+0238 cb 3f				SRL A 
+023a cb 3f				SRL A 
+023c cd 4e 02				CALL TOHEX 
+023f cd 9a 02				CALL outchar 
+0242					 
+0242					; Lower nybble 
+0242 78					LD A, B 
+0243 e6 0f				AND 0FH 
+0245 cd 4e 02				CALL TOHEX 
+0248 cd 9a 02				CALL outchar 
+024b					 
+024b f1					POP AF 
+024c c1					POP BC 
+024d c9					RET 
+024e					 
+024e			;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;	 
+024e			; TRANSLATE value in lower A TO 2 HEX CHAR CODES FOR DISPLAY 
+024e			;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;	 
+024e			TOHEX: 
+024e e5					PUSH HL 
+024f d5					PUSH DE 
+0250 16 00				LD D, 0 
+0252 5f					LD E, A 
+0253 21 c3 02				LD HL, DATA 
+0256 19					ADD HL, DE 
+0257 7e					LD A, (HL) 
+0258 d1					POP DE 
+0259 e1					POP HL 
+025a c9					RET 
+025b			 
+025b			;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+025b			;; 	ASCII char code for 0-9,A-F in A to single hex digit 
+025b			;;    subtract $30, if result > 9 then subtract $7 more 
+025b			;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+025b			ATOHEX: 
+025b d6 30				SUB $30 
+025d fe 0a				CP 10 
+025f f8					RET M		; If result negative it was 0-9 so we're done 
+0260 d6 07				SUB $7		; otherwise, subtract $7 more to get to $0A-$0F 
+0262 c9					RET		 
+0263			 
+0263			;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+0263			;; eLDIR - LDIR but with confirmed writes 
+0263			;;   HL=from, DE=to, BC=length 
+0263			;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+0263			eLDIR: 
+0263 f5					PUSH AF 
+0264 78			ldlp:	LD A, B			; test BC for zero first 
+0265 b1					OR C			; stupid z80 doesn't flag after DEC xy 
+0266 ca 77 02				JP Z, ldend 
+0269 7e					LD A, (HL) 
+026a e5					PUSH HL 
+026b			;		LD HL, DE		; illegal opcode 
+026b 62					LD H, D 
+026c 6b					LD L, E 
+026d cd 79 02				CALL CONFWR		; uses HL 
+0270 e1					POP HL 
+0271 23					INC HL 
+0272 13					INC DE 
+0273 0b					DEC BC 
+0274 c3 64 02				JP ldlp 
+0277 f1			ldend:	POP AF 
+0278 c9					RET		 
+0279					 
+0279					 
+0279			;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+0279			;; CONFWR - Write to address with confirm, returns when complete 
+0279			;;          used for writign to EEPROM 
+0279			;;  This will hang the computer if write does not succeed 
+0279			;; byte to write is in A 
+0279			;; address to write is HL 
+0279			;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+0279			CONFWR: 
+0279 c5					PUSH BC 
+027a 47					LD B, A 
+027b 77					LD (HL), A		; write the byte 
+027c 7e			eeloop:	LD A, (HL)		; read the byte 
+027d b8					CP B			; the EEPROM puts inverse of the value 
+027e c2 7c 02				JP NZ, eeloop	; while it is writing 
+0281 c1					POP BC 
+0282 c9					RET	 
+0283					 
+0283					 
+0283			;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+0283			;; Wait until UART has a byte, store it in A 
+0283			;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+0283			inchar: 
+0283 db 02				IN A, (ACIA_LSR)	; read LSR 
+0285 cb 47				BIT 0, A			; bit 0 is Data Ready 
+0287 ca 83 02				JP Z, inchar 
+028a db 03				IN A, (ACIA_PORT) 
+028c c9					RET 
+028d					 
+028d					 
+028d			;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+028d			;; If UART has a byte, store it in A else return $FF 
+028d			;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+028d			chkchar: 
+028d db 02				IN A, (ACIA_LSR) 
+028f cb 47				BIT 0, A			; bit 0 is set when data present 
+0291 c2 97 02				JP NZ, gotchar 
+0294 3e ff				LD A, $FF 
+0296 c9					RET 
+0297			gotchar: 
+0297 db 03				IN A, (ACIA_PORT) 
+0299 c9					RET 
+029a			 
+029a			;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+029a			;; Output the byte in A to UART, wait until transmitted 
+029a			;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+029a			outchar: 
+029a f5					PUSH AF 
+029b d3 03				OUT (ACIA_PORT), A 
+029d			; wait until transmitted 
+029d			oloop:	 
+029d db 02				IN A, (ACIA_LSR)	; read LSR 
+029f cb 77				BIT 6, A	; bit 6 is transmitter empty 
+02a1 ca 9d 02				JP Z, oloop 
+02a4 f1					POP AF 
+02a5 c9					RET 
+02a6				 
+02a6			;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;	 
+02a6			; Output text pointed to by DE 
+02a6			;   loop through calling outchar until $80 is encountered 
+02a6			;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;	 
+02a6			otext: 
+02a6 f5					PUSH AF 
+02a7 1a			otloop:	LD A, (DE) 
+02a8 fe 80				CP $80			; $80 means end of text 
+02aa ca b4 02				JP Z, otend		 
+02ad cd 9a 02				CALL outchar	; output the byte in A 
+02b0 13					INC DE			; point to next 
+02b1 c3 a7 02				JP otloop 
+02b4 f1			otend:	POP AF 
+02b5 c9					RET 
+02b6			 
+02b6			;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;	 
+02b6			;; OUTCRLF - output a CR and an LF 
+02b6			;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;	 
+02b6			OUTCRLF: 
+02b6 f5					PUSH AF 
+02b7 3e 0d				LD A, $0D 
+02b9 cd 9a 02				CALL outchar 
+02bc 3e 0a				LD A, $0A 
+02be cd 9a 02				CALL outchar 
+02c1 f1					POP AF 
+02c2 c9					RET 
+02c3			 
+02c3			DATA: 
+02c3 30					DEFB	30h	; 0 
+02c4 31					DEFB	31h	; 1 
+02c5 32					DEFB	32h	; 2 
+02c6 33					DEFB	33h	; 3 
+02c7 34					DEFB	34h	; 4 
+02c8 35					DEFB	35h	; 5 
+02c9 36					DEFB	36h	; 6 
+02ca 37					DEFB	37h	; 7 
+02cb 38					DEFB	38h	; 8 
+02cc 39					DEFB	39h	; 9 
+02cd 41					DEFB	41h	; A 
+02ce 42					DEFB	42h	; B 
+02cf 43					DEFB	43h	; C 
+02d0 44					DEFB	44h	; D 
+02d1 45					DEFB	45h	; E 
+02d2 46					DEFB	46h	; F 
+02d3				 
+02d3			TEXT0: 
+02d3 .. 0a 0d			DEFM	"Mon $Revision: 1.17 $",$0A,$0D 
+02ea .. 0a 0d			DEFM	"<spc>: display address",$0A,$0D 
+0302 .. 0a 0d			DEFM	"[0-9A-F]: enter address (<esc> abort)",$0A,$0D 
+0329 .. 0a 0d			DEFM	"<ent>: inc address, <bs>:dec address",$0A,$0D 
+034f .. 0a 0d			DEFM	"l: list+inc 16",$0A,$0D 
+035f .. 0a 0d			DEFM	"d: dump at address (any key ends)",$0A,$0D 
+0382 .. 0a 0d			DEFM	"S: set at address (<ent>:set+inc <esc>:end)",$0A,$0D 
+03af .. 0a 0d			DEFM	"X: exec address (caution!)",$0A,$0D 
+03cb .. 0a 0d			DEFM	"c: copy... (length=0 to abort)",$0A,$0D 
+03eb .. 0a 0d			DEFM	"k: bulk set...",$0A,$0D 
+03fb .. 0a 0d			DEFM	"t: type ascii to mem...",$0A,$0D 
+0414 .. 0a 0d			DEFM	"h: this help",$0A,$0D 
+0422 80				DEFB	$80 
+0423			 
+0423			SETTXT: 
+0423 .. 80			DEFM	"SET ",$80 
+0428				 
+0428			EXTXT: 
+0428 .. 80			DEFM	"exec ",$80 
+042e				 
+042e			CPTXT1: 
+042e .. 80			DEFM	"copy from:",$80 
+0439			CPTXT2: 
+0439 .. 80			DEFM	"to:", $80 
+043d			CPTXT3: 
+043d .. 80			DEFM	"length:",$80 
+0445			 
+0445			DONETXT: 
+0445 .. 0a 0d 80		DEFM	"Done.",$0A,$0D,$80 
+044d				 
+044d			 
+044d			;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+044d			;; Additional routines 
+044d			;; April 2015 
+044d			;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; 
+044d			 
+044d			;; Call address in HL 
+044d			;; Works by putting 'display' on the stack 
+044d			;; destroys DE 
+044d			callhl: 
+044d 11 28 04			LD DE, EXTXT	; confirmation text 
+0450 cd a6 02			CALL otext 
+0453 cd 1e 02			CALL dispadd 
+0456 cd b6 02			CALL OUTCRLF 
+0459 cd 83 02			CALL inchar 
+045c fe 0d			CP $0D			; <ret> we continue, else abort 
+045e c2 d4 00			JP NZ, xabort	; xabort jumps to display 
+0461				 
+0461 11 0c 00			LD DE, display 
+0464 d5				PUSH DE 
+0465 e5				PUSH HL 
+0466 c9				RET 
+0467			 
+0467			 
+0467			;; Bulk memory set, continuous entry 
+0467			;; designed to take paste from clipboard 
+0467			;; of continual hex stream 
+0467			;; starts from HL until <esc> 
+0467			bulkset: 
+0467 d5				PUSH DE 
+0468 11 9f 04			LD DE, bstxt 
+046b cd a6 02			CALL otext 
+046e				 
+046e				; ask for address -> HL 
+046e af				XOR A 
+046f cd 74 01			CALL fourcar 
+0472				 
+0472 11 ae 04			LD DE, bstxt1 
+0475 cd a6 02			CALL otext 
+0478				 
+0478			bkdigit:	 
+0478				; Digit 1 
+0478 cd 83 02			CALL inchar 
+047b fe 1b			CP $1B 
+047d 28 16			JR Z, bsabort 
+047f cd 9a 02			CALL outchar	; echo the character 
+0482 cd 5b 02			CALL ATOHEX		; convert to binary 
+0485 ed 6f			RLD				; move into (HL) lower nybble 
+0487			 
+0487				; Digit 2 
+0487 cd 83 02			CALL inchar 
+048a cd 9a 02			CALL outchar	; echo the character 
+048d cd 5b 02			CALL ATOHEX		; convert to binary 
+0490 ed 6f			RLD				; shift (HL) and move into lower nybble 
+0492				 
+0492 23				INC HL 
+0493 18 e3			JR 	bkdigit 
+0495				 
+0495			bsabort: 
+0495 11 45 04			LD DE, DONETXT 
+0498 cd a6 02			CALL otext 
+049b d1				POP DE 
+049c c3 0c 00			JP	display 
+049f			bstxt: 
+049f .. 80			DEFM "Bulk load to: ",$80 
+04ae			bstxt1: 
+04ae .. 80			DEFM "Ready (<esc> to end): ",$80 
+04c5				 
+04c5				 
+04c5			;; Type ascii values to memory, <esc> exits 
+04c5			typemem: 
+04c5 d5				PUSH DE 
+04c6 11 e8 04			LD DE, tmtxt 
+04c9 cd a6 02			CALL otext 
+04cc			 
+04cc				; ask for address -> HL 
+04cc af				XOR A			; zero A as first digit of fourchar 
+04cd cd 74 01			CALL fourcar	; set HL as per user entry 
+04d0			 
+04d0 11 ae 04			LD DE, bstxt1 
+04d3 cd a6 02			CALL otext 
+04d6			 
+04d6			tmloop: 
+04d6 cd 83 02			CALL inchar 
+04d9 77				LD (HL), A 
+04da 23				INC HL 
+04db cd 9a 02			CALL outchar 
+04de fe 1b			CP $1B		; escape 
+04e0 20 f4			JR NZ, tmloop 
+04e2			 
+04e2			;	LD HL, DE		; illegal opcode 
+04e2 62				LD H, D 
+04e3 6b				LD L, E 
+04e4 d1				POP DE 
+04e5 c3 0c 00			JP display 
+04e8			tmtxt: 
+04e8 .. 80			DEFM "Type ascii to: ",$80 
+04f8				 
+04f8			 
+04f8			;; Set memory range to value in A 
+04f8			;; From HL, length in BC 
+04f8			SETMEM: 
+04f8 d5				PUSH DE 
+04f9 57				LD D, A 
+04fa			smloop: 
+04fa 78				LD A, B		; Test BC for zero first 
+04fb b1				OR C 
+04fc 28 08			JR Z, smend		 
+04fe 7a				LD A, D 
+04ff cd 79 02			CALL CONFWR 
+0502 23				INC HL 
+0503 0b				DEC BC 
+0504 18 f4			JR smloop 
+0506			smend:	 
+0506 11 45 04			LD DE, DONETXT 
+0509 cd a6 02			CALL otext 
+050c d1				POP DE 
+050d c3 0c 00			JP display 
+0510			 
+0510 .. 0d 0a 80	txt:	DEFM "Fin.",$0D,$0A,$80
+# End of file z80UARTMonitor.asm
+0517

@@ -1,0 +1,67 @@
+[*]
+[*] GTKWave Analyzer v3.3.115 (w)1999-2023 BSI
+[*] Wed Dec 27 05:42:13 2023
+[*]
+[dumpfile] "/home/ericb/Engineering/KBADC/lattice/up5k_z80/icarus/tb_system_z80.vcd"
+[dumpfile_mtime] "Wed Dec 27 05:38:00 2023"
+[dumpfile_size] 225882
+[savefile] "/home/ericb/Engineering/KBADC/lattice/up5k_z80/icarus/tb_system_z80.gtkw"
+[timestart] 0
+[size] 1976 1013
+[pos] -1 -1
+*-21.000000 5930000 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[treeopen] tb_system_z80.
+[treeopen] tb_system_z80.uut.
+[sst_width] 373
+[signals_width] 232
+[sst_expanded] 1
+[sst_vpaned_height] 280
+@200
+-TB
+@28
+tb_system_z80.RX
+tb_system_z80.TX
+tb_system_z80.clk
+@22
+tb_system_z80.gpio_i[7:0]
+tb_system_z80.gpio_o[7:0]
+@28
+tb_system_z80.reset
+@200
+-UUT
+@22
+tb_system_z80.uut.A[15:0]
+@28
+tb_system_z80.uut.RX
+tb_system_z80.uut.TX
+tb_system_z80.uut.busak_n
+tb_system_z80.uut.clk
+@22
+tb_system_z80.uut.di[7:0]
+tb_system_z80.uut.dout[7:0]
+tb_system_z80.uut.gpio_do[7:0]
+tb_system_z80.uut.gpio_i[7:0]
+tb_system_z80.uut.gpio_o[7:0]
+@28
+tb_system_z80.uut.gpio_sel
+tb_system_z80.uut.halt_n
+tb_system_z80.uut.iorq_n
+tb_system_z80.uut.m1_n
+tb_system_z80.uut.mreq_n
+@22
+tb_system_z80.uut.ram_do[7:0]
+@28
+tb_system_z80.uut.ram_sel
+tb_system_z80.uut.rd_n
+tb_system_z80.uut.reset
+tb_system_z80.uut.rfsh_n
+@22
+tb_system_z80.uut.rom_do[7:0]
+@28
+tb_system_z80.uut.rom_sel
+tb_system_z80.uut.wr_n
+tb_system_z80.uut.acia_sel
+@22
+tb_system_z80.uut.acia_do[7:0]
+[pattern_trace] 1
+[pattern_trace] 0

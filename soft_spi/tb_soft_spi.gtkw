@@ -1,0 +1,75 @@
+[*]
+[*] GTKWave Analyzer v3.3.115 (w)1999-2023 BSI
+[*] Fri Jan 12 03:10:01 2024
+[*]
+[dumpfile] "/home/ericb/Engineering/KBADC/lattice/icebreaker_z80/soft_spi/tb_soft_spi.vcd"
+[dumpfile_mtime] "Thu Jan 11 22:04:33 2024"
+[dumpfile_size] 2981358
+[savefile] "/home/ericb/Engineering/KBADC/lattice/icebreaker_z80/soft_spi/tb_soft_spi.gtkw"
+[timestart] 0
+[size] 1812 1059
+[pos] -1 -1
+*-20.000000 1777000 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[treeopen] tb_soft_spi.
+[sst_width] 373
+[signals_width] 248
+[sst_expanded] 1
+[sst_vpaned_height] 311
+@200
+-TOP
+@28
+tb_soft_spi.addr
+tb_soft_spi.clk
+tb_soft_spi.cs
+@22
+tb_soft_spi.din[7:0]
+tb_soft_spi.dout[7:0]
+@28
+tb_soft_spi.irq
+tb_soft_spi.rdy
+tb_soft_spi.reset
+tb_soft_spi.spi0_cs0
+tb_soft_spi.spi0_miso
+tb_soft_spi.spi0_mosi
+tb_soft_spi.spi0_sclk
+@22
+tb_soft_spi.spi_diag[3:0]
+@28
+tb_soft_spi.we
+@200
+-UUT
+@28
+tb_soft_spi.uut.addr
+tb_soft_spi.uut.busy
+tb_soft_spi.uut.clk
+tb_soft_spi.uut.cnt[2:0]
+tb_soft_spi.uut.cs
+@29
+tb_soft_spi.uut.cs0
+@22
+tb_soft_spi.uut.diag[3:0]
+tb_soft_spi.uut.din[7:0]
+@28
+tb_soft_spi.uut.done
+@22
+tb_soft_spi.uut.dout[7:0]
+@28
+tb_soft_spi.uut.irq
+tb_soft_spi.uut.rdy
+tb_soft_spi.uut.rst
+@22
+tb_soft_spi.uut.rxd[7:0]
+@28
+tb_soft_spi.uut.rxf
+tb_soft_spi.uut.sclk
+@22
+tb_soft_spi.uut.shift_in[7:0]
+tb_soft_spi.uut.shift_out[7:0]
+@28
+tb_soft_spi.uut.spi0_cs0
+tb_soft_spi.uut.spi0_miso
+tb_soft_spi.uut.spi0_mosi
+tb_soft_spi.uut.spi0_sclk
+tb_soft_spi.uut.we
+[pattern_trace] 1
+[pattern_trace] 0
