@@ -47,8 +47,8 @@ $(FAKE_HEX):
 	$(NEXTPNR) $(NEXTPNR_ARGS) --$(DEVICE) --package $(PKG) --json $< --pcf $(PIN_DEF) --asc $@
 
 $(REAL_HEX):
-	$(MAKE) -C ../asm/
-	cp ../asm/$(FAKE_HEX) ./$(REAL_HEX)
+	$(MAKE) -C ../asm/rom/
+	cp ../asm/rom/$(FAKE_HEX) ./$(REAL_HEX)
 		
 %.bin: %.asc $(REAL_HEX)
 	$(ICEBRAM) $(FAKE_HEX) $(REAL_HEX) < $< > temp.asc
@@ -76,7 +76,7 @@ lint: $(SRC)
 
 clean:
 	rm -f *.json *.asc *.rpt *.bin *.hex
-	$(MAKE) clean -C ../asm/
+	$(MAKE) clean -C ../asm/rom/
 
 .SECONDARY:
 .PHONY: all prog clean

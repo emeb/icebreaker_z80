@@ -3,7 +3,7 @@
 
 # assy source files
 SRC =	rom.asm
-INC =	acia.asm spi.asm
+INC =	../common/acia.asm ../common/spi.asm
 
 # compiler output
 OBJ = rom

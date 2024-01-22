@@ -471,7 +471,7 @@ eeloop:	LD A, (HL)		; read the byte
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; serial I/O
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-include 'acia.asm'
+include '../common/acia.asm'
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;	
 ; Output text pointed to by DE
@@ -733,7 +733,7 @@ endout:
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; SPI I/O
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-include 'soft_spi.asm'
+include '../common/soft_spi.asm'
 
 ;; test spi stuff
 spi_read_test:
@@ -752,7 +752,7 @@ spi_read_test:
 	LD	C, $0A				; flash addr high byte
 	LD	HL, $0000			; flash addr mid & low byte
 	LD	IX, $8000			; destination address
-	LD	DE, $0200			; 2 pages length
+	LD	DE, $0800			; 2k length
 	CALL spi_flash_read		; load from spi to sram
 	LD DE, spi_txt3
 	CALL otext
