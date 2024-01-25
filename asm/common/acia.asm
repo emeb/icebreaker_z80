@@ -17,6 +17,18 @@ inchar:
 		IN A, (ACIA_PORT)
 		RET
 		
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Return FF in A if UART has a byte, else 00
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+instat:
+		IN A, (ACIA_LSR)	; read LSR
+		BIT 0, A			; bit 1 is RXF
+		JP Z, .nochar
+		LD A, $FF			; char ready
+		RET
+.nochar:
+		LD A, $00			; no char avail
+		RET
 		
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; If UART has a byte, store it in A else return $FF
@@ -24,10 +36,10 @@ inchar:
 chkchar:
 		IN A, (ACIA_LSR)
 		BIT 0, A			; bit 1 is set when data present
-		JP NZ, gotchar
+		JP NZ, .gotchar
 		LD A, $FF
 		RET
-gotchar:
+.gotchar:
 		IN A, (ACIA_PORT)
 		RET
 
@@ -38,10 +50,22 @@ outchar:
 		PUSH AF
 		OUT (ACIA_PORT), A
 ; wait until transmitted
-oloop:	
+.oloop:	
 		IN A, (ACIA_LSR)	; read LSR
 		BIT 1, A	; bit 0 is transmitter empty
-		JP Z, oloop
+		JP Z, .oloop
 		POP AF
 		RET
-	
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Output a null-terminated string pointed by HL
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+outstr:
+		LD A, (HL)
+		CP $00
+		JP Z, .strend
+		CALL outchar
+		INC HL
+		JP outstr
+.strend:
+		RET

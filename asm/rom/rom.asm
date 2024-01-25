@@ -39,8 +39,12 @@ STACK:		equ BUFFER-1	; then we have the stack
 
 init:
 	LD HL,0000h
+	
 	LD A, $00				; Clear GPIO out
 	OUT ($00), A
+	
+	LD HL, BOOTTXT
+	CALL outstr
 	
 start:
 ; Output the startup text
@@ -766,6 +770,9 @@ spi_txt2:
 	DEFM "Flash Initialized -",$0D,$0A,$80
 spi_txt3:
 	DEFM "Flash Read complete",$0D,$0A,$80
+	
+BOOTTXT:
+	DEFM "ICE40 UP5k Z80 System",$0D,$0A,$00
 
 txt:	DEFM "Fin.",$0D,$0A,$80
 
