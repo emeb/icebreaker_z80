@@ -12,6 +12,7 @@ SRC =	icebreaker_z80_top.v ../src/system_z80.v ../src/ram_32kb.v \
 		../tv80/tv80_mcode.v ../tv80/tv80_reg.v
 
 # preparing the machine code
+HEX_DIR = ../asm/rom
 FAKE_HEX =	rom.hex
 REAL_HEX =  code.hex
 
@@ -47,8 +48,8 @@ $(FAKE_HEX):
 	$(NEXTPNR) $(NEXTPNR_ARGS) --$(DEVICE) --package $(PKG) --json $< --pcf $(PIN_DEF) --asc $@
 
 $(REAL_HEX):
-	$(MAKE) -C ../asm/rom/
-	cp ../asm/rom/$(FAKE_HEX) ./$(REAL_HEX)
+	$(MAKE) -C $(HEX_DIR)/
+	cp $(HEX_DIR)/$(FAKE_HEX) ./$(REAL_HEX)
 		
 %.bin: %.asc $(REAL_HEX)
 	$(ICEBRAM) $(FAKE_HEX) $(REAL_HEX) < $< > temp.asc
@@ -76,7 +77,7 @@ lint: $(SRC)
 
 clean:
 	rm -f *.json *.asc *.rpt *.bin *.hex
-	$(MAKE) clean -C ../asm/rom/
+	$(MAKE) clean -C $(HEX_DIR)/
 
 .SECONDARY:
 .PHONY: all prog clean
