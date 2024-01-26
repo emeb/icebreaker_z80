@@ -33,20 +33,63 @@ KDATA2:		equ KDATA1-1
 BUFFER:		equ	KDATA2-256	; for building strings - 256 bytes
 STACK:		equ BUFFER-1	; then we have the stack
 	
-	org 0
-	
-	LD SP,STACK
+	ORG 0
+
+; init stack
+	LD SP, $1000
 
 init:
-	LD HL,0000h
+	LD HL, $0000
 	
 	LD A, $00				; Clear GPIO out
 	OUT ($00), A
-	
-	LD HL, BOOTTXT
+
+; wait for B or M from user
+.initloop:
+	LD HL, .inittxt
 	CALL outstr
+	CALL inchar
+	CP 96					; is lowercase?
+	JP C, .uppercase
+	SUB 32					; yes, convert to upper
+.uppercase:
+	CP 'B'
+	JP Z, .boot				; found B - run spi loader
+	CP 'M'
+	JP Z, start				; found M - run monitor
+	CALL outchar			; all others - report error and retry
+	LD HL, .looptxt
+	CALL outstr
+	JP .initloop
+
+; read 16kB from SPI flash into C000 - FFFF
+.boot:
+	LD HL, .boottxt
+	CALL outstr
+	CALL spi_init			; initialize spi port
+	CALL spi_flash_init		; init flash chip
+	LD	C, $0A				; flash addr high byte
+	LD	HL, $0000			; flash addr mid & low byte
+	LD	IX, $C000			; destination address
+	LD	DE, $4000			; 16k length
+	CALL spi_flash_read		; load from spi to sram
+	JP $C000				; run loaded code
+	
+.inittxt:
+	DEFM $0D,$0A
+	DEFM "ICE40 UP5k Z80 System",$0D,$0A
+	DEFM "[B]oot, [M]onitor",$0D,$0A
+	DEFM $00
+
+.boottxt:
+	DEFM "Booting...",$0D,$0A,$00
+
+.looptxt:
+	DEFM " : Unknown key - retry",$0D,$0A,$00
 	
 start:
+; Monitor Stack
+	LD SP, STACK
 ; Output the startup text
 	LD DE, TEXT0
 	CALL otext
@@ -523,7 +566,7 @@ DATA:
 		DEFB	46h	; F
 	
 TEXT0:
-	DEFM	"Mon $Revision: 1.13 $",$0A,$0D
+	DEFM	"Mon [ROM] $Revision: 1.13 $",$0A,$0D
 	DEFM	"<spc>: display address",$0A,$0D
 	DEFM	"[0-9A-F]: enter address (<esc> abort)",$0A,$0D
 	DEFM	"<ent>: inc address, <bs>:dec address",$0A,$0D
@@ -771,9 +814,6 @@ spi_txt2:
 spi_txt3:
 	DEFM "Flash Read complete",$0D,$0A,$80
 	
-BOOTTXT:
-	DEFM "ICE40 UP5k Z80 System",$0D,$0A,$00
-
 txt:	DEFM "Fin.",$0D,$0A,$80
 
 	end

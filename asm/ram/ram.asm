@@ -33,7 +33,7 @@ KDATA2:		equ KDATA1-1
 BUFFER:		equ	KDATA2-256	; for building strings - 256 bytes
 STACK:		equ BUFFER-1	; then we have the stack
 	
-	org 8000h
+	org 0C000h
 	
 	LD SP,STACK
 
